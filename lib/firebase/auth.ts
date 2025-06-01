@@ -1,32 +1,53 @@
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  User as FirebaseUser,
-  AuthError,
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { Result, ok, err, fromAsyncThrowable } from 'neverthrow';
-import { auth, db } from './config';
-import { User, LoginCredentials, RegisterCredentials } from '@/types';
 import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { log } from '@/lib/logger';
+import { LoginCredentials, RegisterCredentials, User } from '@/types';
+import {
+  AuthError,
+  User as FirebaseUser,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Result, err, fromAsyncThrowable, ok } from 'neverthrow';
+import { auth, db } from './config';
 
 // Firebase認証エラーをAppErrorに変換
 function mapFirebaseAuthError(error: AuthError): AppError {
   switch (error.code) {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
-      return createError(ErrorCode.INVALID_CREDENTIALS, 'メールアドレスまたはパスワードが正しくありません');
+    case 'auth/invalid-credential':
+    case 'auth/user-disabled':
+      return createError(
+        ErrorCode.INVALID_CREDENTIALS,
+        'メールアドレスまたはパスワードが正しくありません'
+      );
     case 'auth/invalid-email':
       return createError(ErrorCode.INVALID_EMAIL, 'メールアドレスの形式が正しくありません');
     case 'auth/email-already-in-use':
-      return createError(ErrorCode.EMAIL_ALREADY_IN_USE, 'このメールアドレスは既に使用されています');
+      return createError(
+        ErrorCode.EMAIL_ALREADY_IN_USE,
+        'このメールアドレスは既に使用されています'
+      );
     case 'auth/weak-password':
       return createError(ErrorCode.WEAK_PASSWORD, 'パスワードは6文字以上で入力してください');
     case 'auth/too-many-requests':
       return createError(ErrorCode.TOO_MANY_REQUESTS, 'しばらく時間をおいてから再試行してください');
+    case 'auth/network-request-failed':
+      return createError(ErrorCode.NETWORK_ERROR, 'ネットワークエラーが発生しました');
+    case 'auth/configuration-not-found':
+      return createError(
+        ErrorCode.FIREBASE_ERROR,
+        'Firebase設定が見つかりません。管理者にお問い合わせください'
+      );
+    case 'auth/app-not-authorized':
+      return createError(ErrorCode.FIREBASE_ERROR, 'アプリケーションが認証されていません');
     default:
+      // ネットワークエラーの場合の特別処理
+      if (error.message === 'Network error') {
+        return createError(ErrorCode.NETWORK_ERROR, 'ネットワークエラーが発生しました');
+      }
       return createError(ErrorCode.FIREBASE_ERROR, error.message, { code: error.code });
   }
 }
@@ -48,7 +69,7 @@ async function createUserDocument(firebaseUser: FirebaseUser): Promise<Result<Us
   );
 
   const result = await createDoc();
-  
+
   if (result.isOk()) {
     log.info('User document created', { userId: user.id });
     return ok(result.value);
@@ -92,17 +113,17 @@ export async function loginUser(credentials: LoginCredentials): Promise<Result<U
   );
 
   const result = await signIn();
-  
+
   if (result.isErr()) {
     log.error('Login failed', result.error, { email });
     return err(result.error);
   }
 
   const firebaseUser = result.value;
-  
+
   // ユーザードキュメントを取得または作成
   const userDocResult = await getUserDocument(firebaseUser.uid);
-  
+
   if (userDocResult.isErr()) {
     return err(userDocResult.error);
   }
@@ -117,7 +138,9 @@ export async function loginUser(credentials: LoginCredentials): Promise<Result<U
 }
 
 // ユーザー登録
-export async function registerUser(credentials: RegisterCredentials): Promise<Result<User, AppError>> {
+export async function registerUser(
+  credentials: RegisterCredentials
+): Promise<Result<User, AppError>> {
   const { email, password } = credentials;
 
   const createUser = fromAsyncThrowable(
@@ -134,17 +157,17 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Re
   );
 
   const result = await createUser();
-  
+
   if (result.isErr()) {
     log.error('Registration failed', result.error, { email });
     return err(result.error);
   }
 
   const firebaseUser = result.value;
-  
+
   // ユーザードキュメントを作成
   const userDocResult = await createUserDocument(firebaseUser);
-  
+
   if (userDocResult.isOk()) {
     log.info('User registered successfully', { userId: firebaseUser.uid });
   }
@@ -162,7 +185,7 @@ export async function logoutUser(): Promise<Result<void, AppError>> {
   );
 
   const result = await logout();
-  
+
   if (result.isOk()) {
     log.info('User logged out successfully');
   } else {

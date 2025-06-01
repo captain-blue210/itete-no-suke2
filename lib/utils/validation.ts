@@ -1,6 +1,6 @@
-import { Result, ok, err } from 'neverthrow';
-import { LoginCredentials, RegisterCredentials } from '@/types';
 import { AppError, ErrorCode, createError } from '@/lib/errors';
+import { LoginCredentials, RegisterCredentials } from '@/types';
+import { Result, err, ok } from 'neverthrow';
 
 // メールアドレスの形式をチェック
 export function validateEmail(email: string): boolean {
@@ -10,11 +10,16 @@ export function validateEmail(email: string): boolean {
 
 // パスワードの強度をチェック
 export function validatePassword(password: string): boolean {
+  if (!password || typeof password !== 'string') {
+    return false;
+  }
   return password.length >= 6;
 }
 
 // ログイン情報の検証
-export function validateLoginCredentials(credentials: LoginCredentials): Result<LoginCredentials, AppError> {
+export function validateLoginCredentials(
+  credentials: LoginCredentials
+): Result<LoginCredentials, AppError> {
   const { email, password } = credentials;
 
   if (!email.trim()) {
@@ -22,18 +27,24 @@ export function validateLoginCredentials(credentials: LoginCredentials): Result<
   }
 
   if (!validateEmail(email)) {
-    return err(createError(ErrorCode.VALIDATION_ERROR, 'メールアドレスの形式が正しくありません'));
+    return err(createError(ErrorCode.VALIDATION_ERROR, '正しいメールアドレスを入力してください'));
   }
 
   if (!password) {
     return err(createError(ErrorCode.VALIDATION_ERROR, 'パスワードを入力してください'));
   }
 
+  if (!validatePassword(password)) {
+    return err(createError(ErrorCode.VALIDATION_ERROR, 'パスワードは6文字以上で入力してください'));
+  }
+
   return ok(credentials);
 }
 
 // 登録情報の検証
-export function validateRegisterCredentials(credentials: RegisterCredentials): Result<RegisterCredentials, AppError> {
+export function validateRegisterCredentials(
+  credentials: RegisterCredentials
+): Result<RegisterCredentials, AppError> {
   const { email, password, confirmPassword } = credentials;
 
   if (!email.trim()) {
