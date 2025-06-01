@@ -2,8 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm search context7)",
+      "Bash(npm install:*)",
+      "Bash(claude mcp add context7 npx @upstash/context7-mcp)",
+      "Bash(claude mcp:*)",
+      "Bash(npm search:*)",
+      "Bash(gh pr checkout:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": false
 }

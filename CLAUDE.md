@@ -1,3 +1,5 @@
+# いててのすけ（痛み記録Webアプリ）
+
 ## プロジェクト概要
 
 「いててのすけ」は、日々の痛みを簡単に記録・管理できるスマートフォン向けWebアプリケーションです。医療知識のない一般ユーザーでも直感的に操作できるよう設計されています。
@@ -14,13 +16,63 @@
 
 ### 技術スタック
 - **フロントエンド**: Next.js 14+ (App Router), TypeScript 5+
-- **スタイリング**: Tailwind CSS or CSS Modules
+- **スタイリング**: Tailwind CSS
 - **認証**: Firebase Auth (Email/Password)
 - **データベース**: Firestore
 - **ストレージ**: Firebase Storage
-- **ホスティング**: Cloudflare Pages
 - **パッケージ管理**: npm
 - **エラーハンドリング**: neverthrow
+- **開発・テスト**: Firebase Local Emulator Suite
+
+### 設計原則
+
+#### 1. Test First 開発（重要ルール）
+**すべての実装はテストファーストで行う**
+- 新機能開発前に必ずテストケースを作成
+- 失敗するテストを確認してから実装開始
+- リファクタリング時もテストが通ることを確認
+- テストが書きにくい設計は見直す
+
+#### 2. 関数型ドメインモデリング
+- ドメインロジックを純粋関数として表現
+- 副作用（Firebase操作）とビジネスロジックを分離
+- 型安全性を重視した設計
+- Resultパターンでエラーハンドリング
+
+```typescript
+// ドメインモデル例
+export type PainLevel = 1 | 2 | 3 | 4;
+
+export interface PainLogData {
+  readonly painLevel: PainLevel;
+  readonly medicineIds: readonly string[];
+  readonly painAreaIds: readonly string[];
+  readonly memo: string;
+  readonly createdAt: Date;
+}
+
+// 純粋関数としてのドメインロジック
+export const createPainLog = (
+  painLevel: PainLevel,
+  medicineIds: string[],
+  painAreaIds: string[],
+  memo: string
+): Result<PainLogData, ValidationError> => {
+  return pipe(
+    validatePainLevel(painLevel),
+    andThen(() => validateMedicines(medicineIds)),
+    andThen(() => validatePainAreas(painAreaIds)),
+    andThen(() => validateMemo(memo)),
+    map(() => ({
+      painLevel,
+      medicineIds: medicineIds as readonly string[],
+      painAreaIds: painAreaIds as readonly string[],
+      memo,
+      createdAt: new Date(),
+    }))
+  );
+};
+```
 
 ### プロジェクト構造
 ```
@@ -36,13 +88,18 @@ iteteno-suke/
 ├── components/             # 共通コンポーネント
 │   ├── ui/                # 基本UIコンポーネント
 │   └── features/          # 機能別コンポーネント
+├── domain/                # ドメインモデル・ロジック
+│   ├── entities/         # エンティティ
+│   ├── value-objects/    # 値オブジェクト
+│   └── services/         # ドメインサービス
+├── infrastructure/        # 外部システムとの接続
+│   ├── firebase/         # Firebase操作
+│   └── repositories/     # データアクセス層
 ├── lib/                   # ユーティリティ・設定
-│   ├── firebase/         # Firebase設定・ヘルパー
 │   ├── errors/           # エラー定義
 │   └── utils/            # 共通ユーティリティ
 ├── types/                # TypeScript型定義
 ├── hooks/                # カスタムフック
-├── stories/              # Storybook
 ├── tests/                # テストファイル
 │   ├── unit/
 │   ├── integration/
@@ -50,134 +107,57 @@ iteteno-suke/
 └── public/               # 静的ファイル
 ```
 
-## Workflow: Explore, Plan, Code, Commit
+## Firebase Local Emulator Suite の活用
 
-- **Step 1: Explore**
-    - Ask Claude to read relevant files, images, or URLs  
-    - Use explicit file references or general pointers 
-    - Consider using subagents for complex problems to verify details
-
-- **Step 2: Plan**
-    - Use "think" modes to trigger extended thinking
-        - "think" < "think hard" < "think harder" < "ultrathink"
-    - Create a document or GitHub issue to document the plan
-    - Allows resetting to planning stage if implementation differs
-
-- **Step 3: Code**
-    - Implement solution based on plan
-    - Verify reasonableness of solution during implementation
-
-- **Step 4: Commit**
-    - Commit the result
-    - Create pull request
-    - Update READMEs or changelogs if relevant
-
-**Note:** Steps 1-2 are crucial for improving solution quality, preventing premature coding
-
--「コミット」と一言指定された場合は以下の処理を実行
-  - 現在がdevブランチの場合は、そのままコミットするか、作業用ブランチを作成するかユーザーに問い合わせてください。
-    - 新しいブランチを作る選択をした場合は適切なブランチ名を付けてブランチを作成し、以下の作業はそのブランチに対して実行してください
-  - 現在の差分を適切に分割し、それぞれ過不足無くメッセージを付けてコミットしてください
-    - .gitignoreに記載されていないが、不要と思われるファイルが変更されている場合はユーザーに確認してください
-    - fs_exportなどのfirestore emulatorのimportファイル、package-lock.jsonについては.gitignoreには記述せず、コミットから除外してください
-
--「作業開始」と一言指定された場合は以下の処理を実行
-  - ローカルのブランチを全て最新にしてください
-  - 現在のブランチをユーザーに提示してください。その際devブランチの場合は注意を促してください
-
-## 開発環境のセットアップ
-
-### 前提条件
-- Node.js 18.x以上
-- npm 9.x以上
-- Firebaseプロジェクト（開発用・本番用）
-
-### 環境変数設定
-
-`.env.local` (開発環境):
-```env
-# Firebase - Development
-NEXT_PUBLIC_FIREBASE_API_KEY=your-dev-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-dev-auth-domain
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-dev-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-dev-storage-bucket
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-dev-sender-id
-NEXT_PUBLIC_FIREBASE_APP_ID=your-dev-app-id
-
-# App Config
-NEXT_PUBLIC_ENVIRONMENT=development
-```
-
-`.env.production` (本番環境):
-```env
-# Firebase - Production
-NEXT_PUBLIC_FIREBASE_API_KEY=your-prod-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-prod-auth-domain
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-prod-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-prod-storage-bucket
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-prod-sender-id
-NEXT_PUBLIC_FIREBASE_APP_ID=your-prod-app-id
-
-# App Config
-NEXT_PUBLIC_ENVIRONMENT=production
-```
-
-### 初期セットアップ
+### テスト環境構築
 ```bash
-# リポジトリのクローン
-git clone [repository-url]
-cd iteteno-suke
+# Firebase エミュレータの設定
+firebase init emulators
 
-# 依存関係のインストール
-npm install
+# エミュレータの起動
+firebase emulators:start
 
-# Firebase CLIのインストール（未インストールの場合）
-npm install -g firebase-tools
-
-# Firebaseログイン
-firebase login
-
-# 開発環境の起動
-npm run dev
+# テスト実行時にエミュレータを使用
+npm run test:integration  # 統合テストでエミュレータ使用
+npm run test:e2e         # E2Eテストでエミュレータ使用
 ```
 
-### Firebase設定
+### エミュレータ設定例
+```json
+// firebase.json
+{
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    }
+  }
+}
+```
 
-1. **Firebaseプロジェクトの作成**
-   - 開発用: `iteteno-suke-dev`
-   - 本番用: `iteteno-suke-prod`
+### テスト用Firebase設定
+```typescript
+// lib/firebase/test-config.ts
+import { connectAuthEmulator } from 'firebase/auth';
+import { connectFirestoreEmulator } from 'firebase/firestore';
+import { connectStorageEmulator } from 'firebase/storage';
 
-2. **Authentication設定**
-   - Email/Password認証を有効化
-
-3. **Firestore設定**
-   - セキュリティルール（`firestore.rules`）:
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       // ユーザーは自分のデータのみアクセス可能
-       match /users/{userId}/{document=**} {
-         allow read, write: if request.auth != null && request.auth.uid == userId;
-       }
-     }
-   }
-   ```
-
-4. **Storage設定**
-   - セキュリティルール（`storage.rules`）:
-   ```
-   rules_version = '2';
-   service firebase.storage {
-     match /b/{bucket}/o {
-       match /users/{userId}/{allPaths=**} {
-         allow read, write: if request.auth != null && request.auth.uid == userId
-           && request.resource.size < 2 * 1024 * 1024  // 2MB制限
-           && request.resource.contentType.matches('image/.*');
-       }
-     }
-   }
-   ```
+if (process.env.NODE_ENV === 'test') {
+  // エミュレータに接続
+  connectAuthEmulator(auth, 'http://localhost:9099');
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  connectStorageEmulator(storage, 'localhost', 9199);
+}
+```
 
 ## 主要な技術的決定事項
 
@@ -201,112 +181,64 @@ export interface AppError {
   details?: unknown;
 }
 
-// 使用例: lib/firebase/painLogs.ts
+// 使用例: infrastructure/repositories/painLogRepository.ts
 import { Result, ok, err, fromAsyncThrowable } from 'neverthrow';
 
-export async function createPainLog(
+export async function savePainLog(
   userId: string,
-  data: PainLogInput
-): Promise<Result<PainLog, AppError>> {
+  painLog: PainLogData
+): Promise<Result<string, AppError>> {
   const firebaseCreate = fromAsyncThrowable(
     async () => {
-      // Firestore操作
-      const docRef = await addDoc(collection(db, `users/${userId}/painLogs`), data);
-      return { id: docRef.id, ...data };
+      const docRef = await addDoc(
+        collection(db, `users/${userId}/painLogs`), 
+        painLog
+      );
+      return docRef.id;
     },
     (error) => ({
       code: ErrorCode.FIREBASE_ERROR,
-      message: 'Failed to create pain log',
+      message: 'Failed to save pain log',
       details: error,
     })
   );
 
-  const result = await firebaseCreate();
-  
-  if (result.isOk()) {
-    logger.info(`Pain log created for user ${userId}`);
-    return ok(result.value);
-  } else {
-    logger.error('Failed to create pain log', result.error);
-    return err(result.error);
-  }
+  return await firebaseCreate();
 }
 ```
 
 ### データ型定義
 
 ```typescript
-// types/index.ts
+// domain/entities/index.ts
 export type PainLevel = 1 | 2 | 3 | 4;
 
 export interface PainLog {
-  id: string;
-  painLevel: PainLevel;
-  medicineIds: string[];  // 最大5個
-  painAreaIds: string[];  // 最大5個
-  memo: string;          // 最大250文字
-  createdAt: string;
+  readonly id: string;
+  readonly painLevel: PainLevel;
+  readonly medicineIds: readonly string[];
+  readonly painAreaIds: readonly string[];
+  readonly memo: string;
+  readonly createdAt: Date;
 }
 
 export interface Medicine {
-  id: string;
-  name: string;
-  isDefault: boolean;
+  readonly id: string;
+  readonly name: string;
+  readonly isDefault: boolean;
 }
 
 export interface PainArea {
-  id: string;
-  name: string;
-  isDefault: boolean;
-}
-
-export interface PainImage {
-  id: string;
-  url: string;
-  uploadedAt: string;
-  painLogId: string;
+  readonly id: string;
+  readonly name: string;
+  readonly isDefault: boolean;
 }
 
 export interface User {
-  id: string;
-  email: string;
-  createdAt: string;
+  readonly id: string;
+  readonly email: string;
+  readonly createdAt: Date;
 }
-```
-
-### ログ戦略
-
-```typescript
-// lib/logger.ts
-import winston from 'winston';
-
-const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.simple(),
-    }),
-  ],
-});
-
-// 構造化ログ
-export const log = {
-  info: (message: string, meta?: Record<string, unknown>) => {
-    logger.info(message, { timestamp: new Date().toISOString(), ...meta });
-  },
-  error: (message: string, error: unknown, meta?: Record<string, unknown>) => {
-    logger.error(message, {
-      timestamp: new Date().toISOString(),
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      ...meta,
-    });
-  },
-  debug: (message: string, meta?: Record<string, unknown>) => {
-    logger.debug(message, { timestamp: new Date().toISOString(), ...meta });
-  },
-};
 ```
 
 ## 開発ガイドライン
@@ -350,6 +282,89 @@ export const log = {
 }
 ```
 
+### テスト戦略
+
+#### 1. 単体テスト（ドメインロジック）
+```typescript
+// tests/unit/domain/painLog.test.ts
+import { describe, it, expect } from 'vitest';
+import { createPainLog } from '@/domain/services/painLogService';
+
+describe('createPainLog', () => {
+  it('should create valid pain log', () => {
+    const result = createPainLog(3, ['med1'], ['area1'], 'Test memo');
+    
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.painLevel).toBe(3);
+      expect(result.value.medicineIds).toEqual(['med1']);
+    }
+  });
+
+  it('should reject invalid pain level', () => {
+    const result = createPainLog(5 as any, [], [], '');
+    
+    expect(result.isErr()).toBe(true);
+  });
+});
+```
+
+#### 2. 統合テスト（Firebase Emulator使用）
+```typescript
+// tests/integration/painLogRepository.test.ts
+import { beforeEach, describe, it, expect } from 'vitest';
+import { savePainLog } from '@/infrastructure/repositories/painLogRepository';
+import { clearFirestore } from './test-helpers';
+
+describe('PainLog Repository', () => {
+  beforeEach(async () => {
+    await clearFirestore();
+  });
+
+  it('should save pain log to Firestore', async () => {
+    const painLogData = {
+      painLevel: 2 as const,
+      medicineIds: ['med1'],
+      painAreaIds: ['area1'],
+      memo: 'Test',
+      createdAt: new Date(),
+    };
+
+    const result = await savePainLog('user123', painLogData);
+    
+    expect(result.isOk()).toBe(true);
+  });
+});
+```
+
+#### 3. E2Eテスト（Playwright + Firebase Emulator）
+```typescript
+// tests/e2e/pain-log-flow.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('Pain Log Flow', () => {
+  test.beforeEach(async ({ page }) => {
+    // Firebase Emulatorにテストデータをセットアップ
+    await page.goto('/test-setup');
+  });
+
+  test('should create new pain log', async ({ page }) => {
+    await page.goto('/login');
+    await page.fill('[data-testid="email"]', 'test@example.com');
+    await page.fill('[data-testid="password"]', 'password');
+    await page.click('[data-testid="login-button"]');
+    
+    await page.goto('/pain-log/new');
+    await page.click('[data-testid="pain-level-3"]');
+    await page.fill('[data-testid="memo"]', 'Test pain log');
+    await page.click('[data-testid="submit-button"]');
+    
+    await expect(page).toHaveURL('/dashboard');
+    await expect(page.locator('[data-testid="pain-log-item"]')).toContainText('Test pain log');
+  });
+});
+```
+
 ### コンポーネント開発パターン
 
 ```typescript
@@ -357,24 +372,23 @@ export const log = {
 'use client';
 
 import { useState } from 'react';
-import { Result } from 'neverthrow';
 import { useRouter } from 'next/navigation';
-import { log } from '@/lib/logger';
+import { createPainLog } from '@/domain/services/painLogService';
+import { savePainLog } from '@/infrastructure/repositories/painLogRepository';
 
 interface PainLogFormProps {
-  userId: string;
-  medicines: Medicine[];
-  painAreas: PainArea[];
-  onSubmit?: (data: PainLogInput) => Promise<Result<PainLog, AppError>>;
+  readonly userId: string;
+  readonly medicines: readonly Medicine[];
+  readonly painAreas: readonly PainArea[];
 }
 
-export function PainLogForm({ userId, medicines, painAreas, onSubmit }: PainLogFormProps) {
+export function PainLogForm({ userId, medicines, painAreas }: PainLogFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<PainLogInput>({
-    painLevel: 1,
-    medicineIds: [],
-    painAreaIds: [],
+  const [formData, setFormData] = useState({
+    painLevel: 1 as const,
+    medicineIds: [] as string[],
+    painAreaIds: [] as string[],
     memo: '',
   });
 
@@ -383,14 +397,26 @@ export function PainLogForm({ userId, medicines, painAreas, onSubmit }: PainLogF
     setIsSubmitting(true);
 
     try {
-      const result = await onSubmit?.(formData);
+      // ドメインロジックでバリデーション
+      const painLogResult = createPainLog(
+        formData.painLevel,
+        formData.medicineIds,
+        formData.painAreaIds,
+        formData.memo
+      );
+
+      if (painLogResult.isErr()) {
+        // バリデーションエラー処理
+        return;
+      }
+
+      // リポジトリで永続化
+      const saveResult = await savePainLog(userId, painLogResult.value);
       
-      if (result?.isOk()) {
-        log.info('Pain log created successfully', { userId });
+      if (saveResult.isOk()) {
         router.push('/dashboard');
-      } else if (result?.isErr()) {
-        log.error('Failed to create pain log', result.error);
-        // エラー表示処理
+      } else {
+        // 保存エラー処理
       }
     } finally {
       setIsSubmitting(false);
@@ -398,130 +424,56 @@ export function PainLogForm({ userId, medicines, painAreas, onSubmit }: PainLogF
   };
 
   // フォームUI実装...
+  return (
+    <form onSubmit={handleSubmit} data-testid="pain-log-form">
+      {/* フォーム要素 */}
+    </form>
+  );
 }
 ```
 
-### テスト戦略
+## セキュリティ考慮事項
 
-1. **単体テスト** (Vitest):
-```typescript
-// tests/unit/lib/validation.test.ts
-import { describe, it, expect } from 'vitest';
-import { validatePainLog } from '@/lib/validation';
+### Firebase セキュリティルール
 
-describe('validatePainLog', () => {
-  it('should accept valid pain log data', () => {
-    const result = validatePainLog({
-      painLevel: 3,
-      medicineIds: ['med1', 'med2'],
-      painAreaIds: ['area1'],
-      memo: 'Test memo',
-    });
-    
-    expect(result.isOk()).toBe(true);
-  });
-
-  it('should reject more than 5 medicines', () => {
-    const result = validatePainLog({
-      painLevel: 2,
-      medicineIds: ['1', '2', '3', '4', '5', '6'],
-      painAreaIds: [],
-      memo: '',
-    });
-    
-    expect(result.isErr()).toBe(true);
-  });
-});
+1. **Firestore Rules** (`firestore.rules`):
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ユーザーは自分のデータのみアクセス可能
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidPainLogData(resource.data);
+    }
+  }
+  
+  function isValidPainLogData(data) {
+    return data.painLevel is int 
+      && data.painLevel >= 1 
+      && data.painLevel <= 4
+      && data.medicineIds.size() <= 5
+      && data.painAreaIds.size() <= 5
+      && data.memo.size() <= 250;
+  }
+}
 ```
 
-2. **統合テスト** (React Testing Library):
-```typescript
-// tests/integration/PainLogForm.test.tsx
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { PainLogForm } from '@/components/features/PainLogForm';
-
-describe('PainLogForm', () => {
-  it('should submit form with valid data', async () => {
-    const mockSubmit = vi.fn().mockResolvedValue(ok({ id: '123' }));
-    
-    render(
-      <PainLogForm
-        userId="user123"
-        medicines={[]}
-        painAreas={[]}
-        onSubmit={mockSubmit}
-      />
-    );
-    
-    // テスト実装...
-  });
-});
+2. **Storage Rules** (`storage.rules`):
+```javascript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/images/{imageId} {
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.size < 2 * 1024 * 1024  // 2MB制限
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
 ```
-
-3. **E2Eテスト** (Playwright):
-```typescript
-// tests/e2e/pain-log-flow.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Pain Log Flow', () => {
-  test('should create new pain log', async ({ page }) => {
-    // ログイン
-    await page.goto('/login');
-    await page.fill('[name="email"]', 'test@example.com');
-    await page.fill('[name="password"]', 'password');
-    await page.click('button[type="submit"]');
-    
-    // 新規記録作成
-    await page.goto('/pain-log/new');
-    await page.click('[data-pain-level="3"]');
-    await page.fill('[name="memo"]', 'Test pain log');
-    await page.click('button[type="submit"]');
-    
-    // 確認
-    await expect(page).toHaveURL('/dashboard');
-  });
-});
-```
-
-## デプロイメント
-
-### Cloudflare Pages設定
-
-1. **ビルド設定**:
-   - ビルドコマンド: `npm run build`
-   - ビルド出力ディレクトリ: `.next`
-   - Node.jsバージョン: 18.x
-
-2. **環境変数**:
-   - Cloudflare Pagesダッシュボードで本番用環境変数を設定
-
-3. **自動デプロイ**:
-   ```yaml
-   # .github/workflows/deploy.yml
-   name: Deploy to Cloudflare Pages
-   
-   on:
-     push:
-       branches: [main]
-   
-   jobs:
-     deploy:
-       runs-on: ubuntu-latest
-       steps:
-         - uses: actions/checkout@v3
-         - uses: actions/setup-node@v3
-           with:
-             node-version: '18'
-         - run: npm ci
-         - run: npm run test
-         - run: npm run build
-         - uses: cloudflare/pages-action@v1
-           with:
-             apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-             accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-             projectName: iteteno-suke
-             directory: .next
-   ```
 
 ## パフォーマンス最適化
 
@@ -541,60 +493,9 @@ const getCachedPainLogs = unstable_cache(
     return result.isOk() ? result.value : [];
   },
   ['pain-logs'],
-  { revalidate: 60 } // 60秒キャッシュ
+  { revalidate: 60 }
 );
 ```
-
-## トラブルシューティング
-
-### よくある問題と対処法
-
-1. **Firebase認証エラー**
-   - 環境変数が正しく設定されているか確認
-   - Firebase Authの設定でメール認証が有効になっているか確認
-
-2. **画像アップロードエラー**
-   - ファイルサイズが2MB以下か確認
-   - Storage セキュリティルールを確認
-   - CORS設定を確認
-
-3. **ビルドエラー**
-   - `npm run type-check` で型エラーを確認
-   - 環境変数がすべて設定されているか確認
-
-### デバッグコマンド
-
-```bash
-# 型チェック
-npm run type-check
-
-# Lintチェック
-npm run lint
-
-# テスト実行
-npm run test        # 単体テスト
-npm run test:e2e    # E2Eテスト
-
-# Storybookの起動
-npm run storybook
-
-# Firebase エミュレータ
-npm run firebase:emulators
-```
-
-## セキュリティ考慮事項
-
-1. **認証・認可**
-   - すべてのAPIリクエストでユーザー認証を確認
-   - ユーザーは自分のデータのみアクセス可能
-
-2. **入力検証**
-   - クライアント側とサーバー側の両方で検証
-   - XSS対策（React のデフォルトエスケープ）
-
-3. **データ保護**
-   - HTTPS通信の強制
-   - 個人情報の最小限の収集
 
 ## 今後の拡張計画
 
@@ -612,3 +513,7 @@ npm run firebase:emulators
    - 家族間での記録共有
    - リマインダー機能
    - 多言語対応
+
+---
+
+最終更新: 2025年6月

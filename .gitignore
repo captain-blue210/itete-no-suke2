@@ -46,3 +46,10 @@ firestore-debug.log
 
 # OS
 Thumbs.db
+
+# tests
+/playwright-report
+/test-results
+
+# roo
+.logs/
