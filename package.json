@@ -20,7 +20,8 @@
     "test:all": "npm run test && npm run test:e2e",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "firebase:emulators": "firebase emulators:start"
+    "firebase:emulators": "firebase emulators:start",
+    "firebase:emulators:test": "firebase emulators:start --only auth,firestore,storage"
   },
   "dependencies": {
     "autoprefixer": "^10.4.0",

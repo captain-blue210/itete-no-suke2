@@ -1,19 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { loginUser } from '@/lib/firebase/auth';
+import { log } from '@/lib/logger';
 import { validateLoginCredentials } from '@/lib/utils/validation';
 import { LoginCredentials } from '@/types';
-import { log } from '@/lib/logger';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 interface LoginFormProps {
   onSuccess?: () => void;
+  onSubmit?: (email: string, password: string) => Promise<any>;
 }
 
-export function LoginForm({ onSuccess }: LoginFormProps) {
+export function LoginForm({ onSuccess, onSubmit }: LoginFormProps) {
   const router = useRouter();
   const [formData, setFormData] = useState<LoginCredentials>({
     email: '',
@@ -25,14 +26,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
-    
+
     // Clear errors when user starts typing
     if (errors[name]) {
-      setErrors(prev => ({
+      setErrors((prev) => ({
         ...prev,
         [name]: '',
       }));
@@ -40,6 +41,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     if (generalError) {
       setGeneralError('');
     }
+  };
+
+  // エラーメッセージを日本語に変換
+  const translateErrorMessage = (message: string): string => {
+    if (message === 'Invalid credentials') {
+      return 'メールアドレスまたはパスワードが正しくありません';
+    }
+    if (message === 'Network error') {
+      return 'ネットワークエラーが発生しました';
+    }
+    // バリデーションエラーメッセージは既に日本語なのでそのまま返す
+    return message;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,26 +64,44 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     try {
       // バリデーション
       const validationResult = validateLoginCredentials(formData);
-      
+
       if (validationResult.isErr()) {
-        setGeneralError(validationResult.error.message);
+        setGeneralError(translateErrorMessage(validationResult.error.message));
+        setIsSubmitting(false);
         return;
       }
 
-      // ログイン実行
-      const result = await loginUser(formData);
-      
-      if (result.isOk()) {
-        log.info('Login successful', { userId: result.value.id });
-        
-        if (onSuccess) {
-          onSuccess();
+      // テスト用のonSubmitが提供されている場合はそれを使用
+      if (onSubmit) {
+        const result = await onSubmit(formData.email, formData.password);
+
+        if (result.isOk()) {
+          log.info('Login successful via onSubmit');
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            router.push('/dashboard');
+          }
         } else {
-          router.push('/dashboard');
+          setGeneralError(translateErrorMessage(result.error.message));
+          log.error('Login failed via onSubmit', result.error);
         }
       } else {
-        setGeneralError(result.error.message);
-        log.error('Login failed', result.error);
+        // 通常のログイン処理
+        const result = await loginUser(formData);
+
+        if (result.isOk()) {
+          log.info('Login successful', { userId: result.value.id });
+
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            router.push('/dashboard');
+          }
+        } else {
+          setGeneralError(translateErrorMessage(result.error.message));
+          log.error('Login failed', result.error);
+        }
       }
     } catch (error) {
       setGeneralError('予期しないエラーが発生しました');
@@ -83,11 +114,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="bg-white p-8 rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900 mb-6">
-          ログイン
-        </h1>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <h1 className="text-2xl font-bold text-center text-gray-900 mb-6">ログイン</h1>
+
+        <form onSubmit={handleSubmit} className="space-y-4" role="form" noValidate>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               メールアドレス
@@ -126,12 +155,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             </div>
           )}
 
-          <Button
-            type="submit"
-            className="w-full"
-            loading={isSubmitting}
-            disabled={isSubmitting}
-          >
+          <Button type="submit" className="w-full" loading={isSubmitting} disabled={isSubmitting}>
             {isSubmitting ? 'ログイン中...' : 'ログイン'}
           </Button>
         </form>
