@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { useRouter } from 'next/navigation';
-import { ok, err } from 'neverthrow';
 import LoginPage from '@/app/login/page';
-import { signIn } from '@/lib/auth';
 import { ErrorCode } from '@/lib/errors';
+import { loginUser } from '@/lib/firebase/auth';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { err, ok } from 'neverthrow';
+import { useRouter } from 'next/navigation';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation');
-vi.mock('@/lib/auth');
+vi.mock('@/lib/firebase/auth');
 
 const mockPush = vi.fn();
 
@@ -19,6 +19,8 @@ describe('Login Page', () => {
       replace: vi.fn(),
       back: vi.fn(),
       forward: vi.fn(),
+      refresh: vi.fn(),
+      prefetch: vi.fn(),
     });
   });
 
@@ -32,8 +34,12 @@ describe('Login Page', () => {
   });
 
   it('should redirect to dashboard on successful login', async () => {
-    const mockUser = { uid: 'test-uid', email: 'test@example.com' };
-    vi.mocked(signIn).mockResolvedValue(ok(mockUser));
+    const mockUser = {
+      id: 'test-uid',
+      email: 'test@example.com',
+      createdAt: new Date().toISOString(),
+    };
+    vi.mocked(loginUser).mockResolvedValue(ok(mockUser));
 
     render(<LoginPage />);
 
@@ -46,7 +52,10 @@ describe('Login Page', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(signIn).toHaveBeenCalledWith('test@example.com', 'password123');
+      expect(loginUser).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'password123',
+      });
       expect(mockPush).toHaveBeenCalledWith('/dashboard');
     });
   });
@@ -56,7 +65,7 @@ describe('Login Page', () => {
       code: ErrorCode.FIREBASE_ERROR,
       message: 'Invalid credentials',
     };
-    vi.mocked(signIn).mockResolvedValue(err(error));
+    vi.mocked(loginUser).mockResolvedValue(err(error));
 
     render(<LoginPage />);
 
@@ -69,7 +78,9 @@ describe('Login Page', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/メールアドレスまたはパスワードが正しくありません/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/メールアドレスまたはパスワードが正しくありません/i)
+      ).toBeInTheDocument();
     });
 
     expect(mockPush).not.toHaveBeenCalled();
@@ -80,7 +91,7 @@ describe('Login Page', () => {
       code: ErrorCode.NETWORK_ERROR,
       message: 'Network error',
     };
-    vi.mocked(signIn).mockResolvedValue(err(error));
+    vi.mocked(loginUser).mockResolvedValue(err(error));
 
     render(<LoginPage />);
 

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { validateEmail, validatePassword, validateLoginForm } from '@/lib/validation';
 import { ErrorCode } from '@/lib/errors';
+import { validateEmail, validateLoginCredentials, validatePassword } from '@/lib/utils/validation';
+import { describe, expect, it } from 'vitest';
 
 describe('Validation utilities', () => {
   describe('validateEmail', () => {
@@ -12,9 +12,9 @@ describe('Validation utilities', () => {
         'test123@test-domain.com',
       ];
 
-      validEmails.forEach(email => {
+      validEmails.forEach((email) => {
         const result = validateEmail(email);
-        expect(result.isOk()).toBe(true);
+        expect(result).toBe(true);
       });
     });
 
@@ -29,12 +29,9 @@ describe('Validation utilities', () => {
         '',
       ];
 
-      invalidEmails.forEach(email => {
+      invalidEmails.forEach((email) => {
         const result = validateEmail(email);
-        expect(result.isErr()).toBe(true);
-        if (result.isErr()) {
-          expect(result.error.code).toBe(ErrorCode.VALIDATION_ERROR);
-        }
+        expect(result).toBe(false);
       });
     });
   });
@@ -48,22 +45,18 @@ describe('Validation utilities', () => {
         'パスワード123', // Japanese characters
       ];
 
-      validPasswords.forEach(password => {
+      validPasswords.forEach((password) => {
         const result = validatePassword(password);
-        expect(result.isOk()).toBe(true);
+        expect(result).toBe(true);
       });
     });
 
     it('should reject passwords that are too short', () => {
       const shortPasswords = ['12345', 'a', '', '1a3'];
 
-      shortPasswords.forEach(password => {
+      shortPasswords.forEach((password) => {
         const result = validatePassword(password);
-        expect(result.isErr()).toBe(true);
-        if (result.isErr()) {
-          expect(result.error.code).toBe(ErrorCode.VALIDATION_ERROR);
-          expect(result.error.message).toContain('6文字以上');
-        }
+        expect(result).toBe(false);
       });
     });
 
@@ -71,14 +64,14 @@ describe('Validation utilities', () => {
       const result1 = validatePassword(undefined as any);
       const result2 = validatePassword(null as any);
 
-      expect(result1.isErr()).toBe(true);
-      expect(result2.isErr()).toBe(true);
+      expect(result1).toBe(false);
+      expect(result2).toBe(false);
     });
   });
 
-  describe('validateLoginForm', () => {
-    it('should accept valid login form data', () => {
-      const result = validateLoginForm({
+  describe('validateLoginCredentials', () => {
+    it('should accept valid login credentials', () => {
+      const result = validateLoginCredentials({
         email: 'test@example.com',
         password: 'password123',
       });
@@ -86,8 +79,8 @@ describe('Validation utilities', () => {
       expect(result.isOk()).toBe(true);
     });
 
-    it('should reject form data with invalid email', () => {
-      const result = validateLoginForm({
+    it('should reject credentials with invalid email', () => {
+      const result = validateLoginCredentials({
         email: 'invalid-email',
         password: 'password123',
       });
@@ -99,10 +92,10 @@ describe('Validation utilities', () => {
       }
     });
 
-    it('should reject form data with invalid password', () => {
-      const result = validateLoginForm({
+    it('should reject credentials with empty password', () => {
+      const result = validateLoginCredentials({
         email: 'test@example.com',
-        password: '123',
+        password: '',
       });
 
       expect(result.isErr()).toBe(true);
@@ -112,10 +105,10 @@ describe('Validation utilities', () => {
       }
     });
 
-    it('should reject form data with both invalid email and password', () => {
-      const result = validateLoginForm({
+    it('should reject credentials with both invalid email and password', () => {
+      const result = validateLoginCredentials({
         email: 'invalid-email',
-        password: '123',
+        password: '',
       });
 
       expect(result.isErr()).toBe(true);
@@ -124,10 +117,10 @@ describe('Validation utilities', () => {
       }
     });
 
-    it('should handle empty form data', () => {
-      const result = validateLoginForm({
+    it('should handle empty email', () => {
+      const result = validateLoginCredentials({
         email: '',
-        password: '',
+        password: 'password123',
       });
 
       expect(result.isErr()).toBe(true);

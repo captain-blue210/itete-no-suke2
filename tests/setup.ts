@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 // Mock Firebase
 vi.mock('firebase/app', () => ({
   initializeApp: vi.fn(),
+  getApps: vi.fn(() => []),
 }));
 
 vi.mock('firebase/auth', () => ({
@@ -23,6 +24,11 @@ vi.mock('firebase/firestore', () => ({
   getDocs: vi.fn(),
   updateDoc: vi.fn(),
   deleteDoc: vi.fn(),
+  setDoc: vi.fn(),
+}));
+
+vi.mock('firebase/storage', () => ({
+  getStorage: vi.fn(),
 }));
 
 // Mock Next.js router

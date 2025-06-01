@@ -1,31 +1,44 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { signIn, signOutUser } from '@/lib/auth';
 import { ErrorCode } from '@/lib/errors';
+import { loginUser, logoutUser } from '@/lib/firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getDoc } from 'firebase/firestore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('firebase/auth');
+vi.mock('firebase/firestore');
 
 describe('Authentication functions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('signIn', () => {
+  describe('loginUser', () => {
     it('should return success result on valid credentials', async () => {
       const mockUser = {
         uid: 'test-uid',
         email: 'test@example.com',
       };
 
+      const mockUserDoc = {
+        id: 'test-uid',
+        email: 'test@example.com',
+        createdAt: '2023-01-01T00:00:00.000Z',
+      };
+
       vi.mocked(signInWithEmailAndPassword).mockResolvedValue({
         user: mockUser,
       } as any);
 
-      const result = await signIn('test@example.com', 'password123');
+      vi.mocked(getDoc).mockResolvedValue({
+        exists: () => true,
+        data: () => mockUserDoc,
+      } as any);
+
+      const result = await loginUser({ email: 'test@example.com', password: 'password123' });
 
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        expect(result.value.uid).toBe('test-uid');
+        expect(result.value.id).toBe('test-uid');
         expect(result.value.email).toBe('test@example.com');
       }
     });
@@ -34,41 +47,47 @@ describe('Authentication functions', () => {
       const firebaseError = new Error('auth/wrong-password');
       vi.mocked(signInWithEmailAndPassword).mockRejectedValue(firebaseError);
 
-      const result = await signIn('test@example.com', 'wrongpassword');
+      const result = await loginUser({ email: 'test@example.com', password: 'wrongpassword' });
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
         expect(result.error.code).toBe(ErrorCode.FIREBASE_ERROR);
-        expect(result.error.message).toContain('Failed to sign in');
+        expect(result.error.message).toContain('ログインに失敗しました');
       }
     });
 
-    it('should validate email format', async () => {
-      const result = await signIn('invalid-email', 'password123');
+    it('should handle Firebase auth/invalid-email error', async () => {
+      const firebaseError = { code: 'auth/invalid-email', message: 'Invalid email' };
+      vi.mocked(signInWithEmailAndPassword).mockRejectedValue(firebaseError);
+
+      const result = await loginUser({ email: 'invalid-email', password: 'password123' });
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error.code).toBe(ErrorCode.VALIDATION_ERROR);
-        expect(result.error.message).toContain('Invalid email format');
+        expect(result.error.code).toBe(ErrorCode.INVALID_EMAIL);
+        expect(result.error.message).toContain('メールアドレスの形式が正しくありません');
       }
     });
 
-    it('should validate password length', async () => {
-      const result = await signIn('test@example.com', '123');
+    it('should handle Firebase auth/weak-password error', async () => {
+      const firebaseError = { code: 'auth/weak-password', message: 'Weak password' };
+      vi.mocked(signInWithEmailAndPassword).mockRejectedValue(firebaseError);
+
+      const result = await loginUser({ email: 'test@example.com', password: '123' });
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error.code).toBe(ErrorCode.VALIDATION_ERROR);
-        expect(result.error.message).toContain('Password must be at least 6 characters');
+        expect(result.error.code).toBe(ErrorCode.WEAK_PASSWORD);
+        expect(result.error.message).toContain('パスワードは6文字以上で入力してください');
       }
     });
   });
 
-  describe('signOutUser', () => {
+  describe('logoutUser', () => {
     it('should return success result on successful sign out', async () => {
       vi.mocked(signOut).mockResolvedValue();
 
-      const result = await signOutUser();
+      const result = await logoutUser();
 
       expect(result.isOk()).toBe(true);
       expect(signOut).toHaveBeenCalledTimes(1);
@@ -78,12 +97,12 @@ describe('Authentication functions', () => {
       const firebaseError = new Error('Firebase sign out error');
       vi.mocked(signOut).mockRejectedValue(firebaseError);
 
-      const result = await signOutUser();
+      const result = await logoutUser();
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
         expect(result.error.code).toBe(ErrorCode.FIREBASE_ERROR);
-        expect(result.error.message).toContain('Failed to sign out');
+        expect(result.error.message).toContain('ログアウトに失敗しました');
       }
     });
   });

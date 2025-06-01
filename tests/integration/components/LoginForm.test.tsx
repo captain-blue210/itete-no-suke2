@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { ok, err } from 'neverthrow';
 import { LoginForm } from '@/components/features/LoginForm';
 import { ErrorCode } from '@/lib/errors';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { err, ok } from 'neverthrow';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockOnSubmit = vi.fn();
 
@@ -14,18 +14,20 @@ describe('LoginForm', () => {
   it('should render email and password fields', () => {
     render(<LoginForm onSubmit={mockOnSubmit} />);
 
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/メールアドレス/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/パスワード/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ログイン/i })).toBeInTheDocument();
   });
 
   it('should validate email format', async () => {
     render(<LoginForm onSubmit={mockOnSubmit} />);
 
-    const emailInput = screen.getByLabelText(/email/i);
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
-    fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
+    fireEvent.change(emailInput, { target: { value: 'invalid' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
     fireEvent.click(submitButton);
 
     await waitFor(() => {
@@ -38,8 +40,8 @@ describe('LoginForm', () => {
   it('should validate password length', async () => {
     render(<LoginForm onSubmit={mockOnSubmit} />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
     fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
@@ -58,8 +60,8 @@ describe('LoginForm', () => {
 
     render(<LoginForm onSubmit={mockOnSubmit} />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
     fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
@@ -76,8 +78,8 @@ describe('LoginForm', () => {
 
     render(<LoginForm onSubmit={mockOnSubmit} />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
     fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
@@ -99,8 +101,8 @@ describe('LoginForm', () => {
 
     render(<LoginForm onSubmit={mockOnSubmit} />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
     fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
@@ -121,8 +123,8 @@ describe('LoginForm', () => {
 
     render(<LoginForm onSubmit={mockOnSubmit} />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
     // Submit with error

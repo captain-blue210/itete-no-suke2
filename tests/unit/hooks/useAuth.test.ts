@@ -1,13 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { useAuth } from '@/hooks/useAuth';
+import { getUserDocument } from '@/lib/firebase/auth';
+import { act, renderHook } from '@testing-library/react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { ok } from 'neverthrow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('firebase/auth');
+vi.mock('@/lib/firebase/auth');
 
 describe('useAuth hook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should initialize with loading state', () => {
@@ -20,18 +28,27 @@ describe('useAuth hook', () => {
     expect(result.current.loading).toBe(true);
   });
 
-  it('should set user when authenticated', () => {
-    const mockUser = {
+  it('should set user when authenticated', async () => {
+    const mockFirebaseUser = {
       uid: 'test-uid',
       email: 'test@example.com',
     };
 
+    const mockAppUser = {
+      id: 'test-uid',
+      email: 'test@example.com',
+      createdAt: '2023-01-01T00:00:00.000Z',
+    };
+
     const mockUnsubscribe = vi.fn();
+    let authCallback: any;
+
     vi.mocked(onAuthStateChanged).mockImplementation((auth, callback) => {
-      // Simulate async auth state change
-      setTimeout(() => callback(mockUser as any), 0);
+      authCallback = callback;
       return mockUnsubscribe;
     });
+
+    vi.mocked(getUserDocument).mockResolvedValue(ok(mockAppUser));
 
     const { result } = renderHook(() => useAuth());
 
@@ -39,26 +56,33 @@ describe('useAuth hook', () => {
     expect(result.current.loading).toBe(true);
     expect(result.current.user).toBeNull();
 
-    // After auth state change
-    act(() => {
-      vi.runAllTimers();
+    // Trigger auth state change
+    await act(async () => {
+      if (authCallback && typeof authCallback === 'function') {
+        await authCallback(mockFirebaseUser);
+      }
     });
 
     expect(result.current.loading).toBe(false);
-    expect(result.current.user).toEqual(mockUser);
+    expect(result.current.user).toEqual(mockAppUser);
   });
 
-  it('should set user to null when not authenticated', () => {
+  it('should set user to null when not authenticated', async () => {
     const mockUnsubscribe = vi.fn();
+    let authCallback: any;
+
     vi.mocked(onAuthStateChanged).mockImplementation((auth, callback) => {
-      setTimeout(() => callback(null), 0);
+      authCallback = callback;
       return mockUnsubscribe;
     });
 
     const { result } = renderHook(() => useAuth());
 
-    act(() => {
-      vi.runAllTimers();
+    // Trigger auth state change with null user
+    await act(async () => {
+      if (authCallback && typeof authCallback === 'function') {
+        await authCallback(null);
+      }
     });
 
     expect(result.current.loading).toBe(false);
@@ -67,7 +91,9 @@ describe('useAuth hook', () => {
 
   it('should unsubscribe on unmount', () => {
     const mockUnsubscribe = vi.fn();
-    vi.mocked(onAuthStateChanged).mockReturnValue(mockUnsubscribe);
+    vi.mocked(onAuthStateChanged).mockImplementation((auth, callback) => {
+      return mockUnsubscribe;
+    });
 
     const { unmount } = renderHook(() => useAuth());
 
